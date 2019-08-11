@@ -1,0 +1,98 @@
+---
+- name: Check if vars/private.yml exist
+  stat: path={{ role_path }}/vars/private.yml
+  register: private_vars
+
+- name: Include private variables
+  include_vars:
+    file: vars/private.yml
+  when: private_vars.stat.exists == true
+
+- import_tasks: debian.yml
+  when: ansible_os_family == 'Debian'
+
+- import_tasks: centos.yml
+  when: ansible_os_family == 'RedHat'
+
+- name: Install six
+  pip:
+    name: six
+  environment:
+    PATH: /usr/local/bin:{{ ansible_env.PATH }}
+
+- name: Install dopy
+  pip:
+    name: dopy
+    version: 0.3.5
+  environment:
+    PATH: /usr/local/bin:{{ ansible_env.PATH }}
+
+- name: Register SSH key
+  digital_ocean:
+    state: present
+    command: ssh
+    name: "{{ do_ssh_key_name }}"
+    ssh_pub_key: "{{ do_ssh_pub_key }}"
+    api_token: "{{ do_api_token }}"
+  register: droplet
+  ignore_errors: yes
+  environment:
+    PATH: /usr/local/bin:{{ ansible_env.PATH }}
+  tags: add_ssh_key
+
+- name: Create droplet
+  digital_ocean:
+    state: active
+    command: droplet
+    name: "{{ droplet_name }}"
+    region_id: "{{ droplet_region_id }}"
+    size_id: "{{ droplet_size_id }}"
+    image_id: "{{ droplet_image_id }}"
+    ssh_key_ids: "{{ droplet_additional_ssh_key_ids }} + [ '{{ droplet.ssh_key.id }}' ]"
+    unique_name: yes
+    api_token: "{{ do_api_token }}"
+    wait_timeout: 600
+  register: droplet
+  tags: create_droplet
+
+- debug: msg="Droplet IP is {{ droplet.droplet.ip_address }}"
+  tags: create_droplet
+
+- name: Create inventory in memory
+  add_host:
+    name: "{{ droplet_name }}"
+    groups: do_droplet_in_memory
+    ansible_ssh_host: "{{ droplet.droplet.ip_address }}"
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: "{{ do_ssh_private_key }}"
+  changed_when: false
+  tags: create_droplet
+
+- name: Check if droplets inventory group exists in inventory file
+  shell: grep -x \[{{ droplets_inventory_group }}\] {{ ansible_inventory_file }}
+  register: inventory_group
+  tags: inventory_file
+  failed_when: inventory_group.rc == 2
+  changed_when: inventory_group.rc == 0
+  when: ansible_inventory_file|length > 0
+
+- name: Add inventory group to inventory file
+  become: no
+  lineinfile:
+    dest: "{{ ansible_inventory_file }}"
+    line: "[{{ droplets_inventory_group }}]"
+    state: present
+  tags: inventory_file
+  when: ansible_inventory_file|length > 0 and inventory_group.rc == 1
+
+- name: Add droplet to inventory file
+  become: no
+  lineinfile:
+    dest: "{{ ansible_inventory_file }}"
+    regexp: "{{ droplet.droplet.ip_address }}"
+    insertafter: ^\[{{ droplets_inventory_group }}\]
+    state: present
+    line: "{{ droplet_name }} ansible_host={{ droplet.droplet.ip_address }}"
+  delegate_to: localhost
+  when: ansible_inventory_file|length > 0
+  tags: inventory_file
