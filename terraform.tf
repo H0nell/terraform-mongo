@@ -61,4 +61,14 @@ resource "null_resource" "ansible-provision" {
   provisioner "local-exec" {
     command = "cat hosts.example >> hosts"
   }
+
+   provisioner "local-exec" {
+    command = "sleep 2m"
+
+  }
+  provisioner "local-exec" {
+    command = "ansible-playbook main.yml"
+  }
+
 }
+
