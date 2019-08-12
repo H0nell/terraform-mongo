@@ -29,3 +29,8 @@
   when: mongodb_security_authorization == 'disabled'
   with_items:
     - "{{ mongodb_replication_params|default([]) }}"
+- name: create mongorc.js
+  command: touch ~/.mongorc.js
+
+- name: add slave_option
+  shell: echo "rs.slaveOk()" > ~/.mongorc.js

@@ -63,7 +63,7 @@ resource "null_resource" "ansible-provision" {
   }
 
    provisioner "local-exec" {
-    command = "sleep 1m"
+    command = "sleep 2m"
 
   }
   provisioner "local-exec" {

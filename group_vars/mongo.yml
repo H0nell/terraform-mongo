@@ -16,7 +16,7 @@ mongodb_users:
   - {
     name: testUser,
     password: W3qasWsKL3UaLhYNBJGM6hKs,
-    roles: readWrite,
+    roles: userAdminAnyDatabase,
     database: admin
   }
 
